@@ -1,0 +1,282 @@
+---
+title: "NYTBestsellers_data_vis"
+author: "Uday Gadge"
+date: "2023-02-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Reading the data
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(readr)
+
+path <- "C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/Data/NYTimes_Bestsellers_raw_data"
+
+df <- read_csv(paste(path,"/NYTimesBestsellers_clean_data.csv",sep = ""))
+head(df)
+```
+
+Color codes to be used in the project
+
+
+```{r}
+#color codes
+red <- '#740001'
+gold <- '#D3A625'
+  
+blue <- '#0E1A40'
+bronze <- '#946B2D'
+  
+yellow <- '#FFD800'
+black <- '#000000'
+  
+green <- '#1A472A'
+silver <- '#5D5D5D'
+  
+```
+
+
+```{r}
+unique(df$genre)
+```
+
+top 10 authors as per number of distinct books on the list
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+df %>% group_by(primary_author) %>% summarise(books = n_distinct(title)) %>% top_n(10) %>%
+  ggplot(aes(x = books,y = reorder(primary_author,books))) + 
+  geom_bar(stat = 'identity', fill = '#740001', color = '#D3A625') + 
+  geom_text(aes(label = books), hjust = 1.6, color = '#D3A625') +
+  xlab("Books") +
+  ylab("Authors") +
+  theme_minimal()
+```
+
+Simplifying the genres
+
+
+```{r}
+Fiction <- c("combined-print-and-e-book-fiction","hardcover-fiction",
+             "trade-fiction-paperback")
+Non_Fiction <- c("combined-print-and-e-book-nonfiction","hardcover-nonfiction",
+                 "paperback-nonfiction")
+Advice <- c("advice-how-to-and-miscellaneous")   
+Young_adult <- c("young-adult-hardcover")
+```
+
+```{r}
+genre_simplified <- function(genre) {
+  if (genre %in% Fiction){result <- "Fiction"}
+  if (genre %in% Non_Fiction) {result <- "NonFiction"}
+  if (genre %in% Advice) {result <- "Advice"}
+  if (genre %in% Young_adult) {result <- "YoungAdult"}
+  return(result)
+}
+df$genre_modified <- sapply(df$genre, genre_simplified)
+```
+```{r}
+head(df)
+```
+
+
+top 10 authors as per number of distinct books on the list for every genre
+
+
+
+```{r}
+df %>% group_by(genre_modified,primary_author) %>% 
+  summarise(books = n_distinct(title)) %>% 
+  arrange(desc(books)) %>% group_by(genre_modified) %>%
+  slice(1:10) %>%
+  ggplot(aes(x = books,y = reorder(primary_author,books))) + 
+  geom_bar(stat = 'identity', fill = '#0E1A40', color = '#946B2D') + 
+  geom_text(aes(label = books), hjust = 1.6, color = '#946B2D') +
+  xlab("Books") +
+  ylab("Authors") +
+  theme_minimal() + facet_wrap(~genre_modified, scales = 'free')
+```
+
+Top 10 books as per total weeks on different lists.
+
+
+```{r}
+df %>% group_by(title, genre, genre_modified) %>% summarize(weeks = max(weeks_on_list)) %>%
+  group_by(title) %>% summarize(total_weeks = sum(weeks)) %>% top_n(10) %>%
+  ggplot(aes(x = total_weeks,y = reorder(title,total_weeks))) + 
+  geom_bar(stat = 'identity', fill = '#FFD800', color = '#000000') + 
+  geom_text(aes(label = total_weeks), hjust = 1.6, color = '#000000') +
+  xlab("Total Weeks on list") +
+  ylab("Book") +
+  theme_minimal() 
+```
+
+
+Top 10 books as per weeks on list for every genre.
+
+
+```{r}
+df %>% group_by(title, genre, genre_modified) %>% summarize(weeks = max(weeks_on_list)) %>%
+  group_by(title, genre_modified) %>% summarize(total_weeks = sum(weeks)) %>%
+  arrange(desc(total_weeks)) %>%
+  group_by(genre_modified) %>%
+  slice(1:10) %>% 
+  ggplot(aes(x = total_weeks,y = reorder(title,total_weeks))) + 
+  geom_bar(stat = 'identity', fill = '#1A472A', color = '#5D5D5D') + 
+  geom_text(aes(label = total_weeks), hjust = 1.6, color = '#5D5D5D') +
+  xlab("Total Weeks on list") +
+  ylab("Book") +
+  theme_minimal() + facet_wrap(~genre_modified, scales = 'free')
+```
+```{r}
+colnames(df)
+
+```
+
+
+Distribution of years since published for every genre
+
+
+
+```{r}
+df %>% filter(!is.na(Age_book)) %>% select(title, genre_modified, Age_book) %>%
+  group_by(title,genre_modified, Age_book) %>% slice(1) %>%
+  ggplot(aes(x = genre_modified, y = Age_book, fill = genre_modified)) + geom_boxplot()+
+  scale_fill_manual(values = c("Fiction" = '#740001',
+                                 "NonFiction" = '#0E1A40',
+                                 "Advice" = '#FFD800',
+                                 "YoungAdult" = '#1A472A'))+
+  xlab("Genre") + ylab("Years since original Publication")
+```
+
+
+Distribution of years since published for every genre along with the weeks on list
+
+
+
+```{r}
+df %>% filter(!is.na(Age_book))%>%
+  group_by(title, genre, genre_modified,Age_book)%>%
+  summarize(weeks = max(weeks_on_list)) %>%
+  group_by(title,Age_book, genre_modified) %>% 
+  summarize(total_weeks = sum(weeks)) %>%
+  ggplot(aes(x = genre_modified, y = Age_book, size = total_weeks)) +
+  geom_point(aes(color = genre_modified),alpha = 0.3)+
+  guides(color = FALSE) +
+  xlab("Genre") + ylab("Years since the original Publication") +
+  scale_size_continuous(range = c(2,10))+
+  scale_colour_manual(values = c("Fiction" = '#740001',
+                                 "NonFiction" = '#0E1A40',
+                                 "Advice" = '#FFD800',
+                                 "YoungAdult" = '#1A472A'))
+```
+
+Distribution of Age of Authors when they wrote the book for every genre.
+
+
+```{r}
+df %>% filter(!is.na(Age_author)) %>% select(title, genre_modified, Age_author) %>%
+  group_by(title,genre_modified, Age_author) %>% slice(1) %>%
+  ggplot(aes(x = genre_modified, y = Age_author, fill = genre_modified)) + geom_boxplot()+
+  scale_fill_manual(values = c("Fiction" = '#D3A625',
+                                 "NonFiction" = '#946B2D',
+                                 "Advice" = '#000000',
+                                 "YoungAdult" = '#5D5D5D'))+
+  xlab("Genre") + ylab("Age of the Author When they wrote the book")
+```
+
+Distribution of Age of Authors when they wrote the book for every genre along with weeks on list.
+
+
+
+```{r}
+df %>% filter(!is.na(Age_author))%>%
+  group_by(title, genre, genre_modified,Age_author)%>%
+  summarize(weeks = max(weeks_on_list)) %>%
+  group_by(title,Age_author, genre_modified) %>% 
+  summarize(total_weeks = sum(weeks)) %>%
+  ggplot(aes(x = genre_modified, y = Age_author, size = total_weeks)) +
+  geom_point(aes(color = genre_modified),alpha = 0.5)+
+  guides(color = FALSE) +
+  xlab("Genre") + ylab("Age of the Author When they wrote the book") +
+  scale_size_continuous(range = c(2,10))+
+  scale_colour_manual(values = c("Fiction" = '#D3A625',
+                                 "NonFiction" = '#946B2D',
+                                 "Advice" = '#000000',
+                                 "YoungAdult" = '#5D5D5D'))
+```
+
+Getting top 10 fiction books based on weeks on list
+
+
+```{r}
+df %>% group_by(title, genre, genre_modified) %>% summarize(weeks = max(weeks_on_list)) %>%
+  group_by(title, genre_modified) %>% summarize(total_weeks = sum(weeks)) %>%
+  arrange(desc(total_weeks)) %>%
+  group_by(genre_modified) %>%
+  slice(1:10) %>% filter(genre_modified == "Fiction") %>% select('title')
+```
+
+The Ranking history of these books.
+
+
+```{r}
+fiction_titles <- c('WHERE THE CRAWDADS SING'
+,'MILK AND HONEY'
+,'THE SILENT PATIENT'
+,'THE SEVEN HUSBANDS OF EVELYN HUGO'
+,'ALL THE LIGHT WE CANNOT SEE'
+,'IT ENDS WITH US'
+,'LITTLE FIRES EVERYWHERE'		
+,'THE MIDNIGHT LIBRARY'
+,'A MAN CALLED OVE')
+df %>% filter(title %in% fiction_titles) %>% 
+  ggplot(aes(x = published_date, y = rank, color = genre)) +
+  geom_point() + geom_line() +
+  scale_colour_manual(values = c( '#740001', '#0E1A40', '#FFD800','#1A472A')) +
+  facet_wrap(~title) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+Similarly for non fiction.
+
+```{r}
+df %>% group_by(title, genre, genre_modified) %>% summarize(weeks = max(weeks_on_list)) %>%
+  group_by(title, genre_modified) %>% summarize(total_weeks = sum(weeks)) %>%
+  arrange(desc(total_weeks)) %>%
+  group_by(genre_modified) %>%
+  slice(1:10) %>% filter(genre_modified == "NonFiction") %>% select('title')
+
+```
+
+
+
+
+```{r}
+nonfiction_titles <- c('THE GLASS CASTLE'			
+,'OUTLIERS'
+,'THE DEVIL IN THE WHITE CITY'		
+,'THINKING, FAST AND SLOW'			
+,'THE BODY KEEPS THE SCORE'			
+,'JUST MERCY'			
+,'EDUCATED'			
+,'SAPIENS'			
+,'BORN A CRIME')
+
+df %>% filter(title %in% nonfiction_titles) %>% 
+  ggplot(aes(x = published_date, y = rank, color = genre)) +
+  geom_point() + geom_line() +
+  scale_colour_manual(values = c( '#D3A625', '#946B2D', '#000000','#5D5D5D')) +
+  facet_wrap(~title) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
