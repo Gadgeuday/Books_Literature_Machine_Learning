@@ -1,0 +1,339 @@
+---
+title: "Association_Rule_Mining"
+author: "Uday Gadge"
+date: "2023-02-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading all the libraries
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(Matrix)
+library(purrr)
+library(arules)
+library(arulesViz)
+library(readxl)
+```
+
+Collecting the data
+
+```{r}
+path <- 'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/Data'
+NYT <- read_csv(paste(path,'/NewYorkTimesBestsellersLists.csv',sep = ''))
+head(NYT)
+```
+```{r}
+Wiki <- read_excel(paste(path,'/Wikipedia_information.xlsx',sep = ''))
+head(Wiki)
+```
+```{r}
+GoogleBooks <- read_csv(paste(path,'/isbn_data.csv',sep = ''))
+head(GoogleBooks)
+```
+```{r}
+NYT_books_isbn <- read_csv(paste(path,'/Book_ISBN.csv',sep = ''))
+head(NYT_books_isbn)
+```
+```{r}
+GoogleBooks <- NYT_books_isbn %>% left_join(GoogleBooks, by = c('isbn13'))
+head(GoogleBooks)
+```
+```{r}
+GoogleBooks$Book_Published_date <- as.Date(GoogleBooks$Book_Published_date)
+head(GoogleBooks)
+```
+
+```{r}
+Googlebooks_date <- GoogleBooks %>% group_by(title, author) %>% 
+  summarise(Published_date = min(Book_Published_date, na.rm = TRUE))
+head(Googlebooks_date)
+```
+```{r}
+p <- function(v) {
+  Reduce(f=paste0, x = v)
+}
+
+GoogleBooks_Genre <- GoogleBooks %>% select(title,author,Categories) %>%
+   filter(!is.na(Categories)) %>%
+   distinct() %>%
+   group_by(title,author) %>%
+   summarize(Categories = p(as.character(Categories))) 
+   
+GoogleBooks_Genre$Categories <- str_sub(tolower(GoogleBooks_Genre$Categories),3,-3)
+
+GoogleBooks_Genre$Categories <- gsub("\\]\\[",'","',
+                                          GoogleBooks_Genre$Categories)
+
+head(GoogleBooks_Genre)
+```
+```{r}
+GoogleBooks_date_genre <- Googlebooks_date %>% left_join(GoogleBooks_Genre,
+                                                         by = c('title','author'))
+head(GoogleBooks_date_genre)
+```
+
+
+```{r}
+head(Wiki)
+```
+
+```{r}
+Wiki <- Wiki %>% filter(Genre != 'N/A') %>%
+  mutate(Genre = gsub("', '",'","',Genre)) 
+head(Wiki)
+```
+```{r}
+Wiki$Genre <- gsub("\\['","",Wiki$Genre)
+Wiki$Genre <- tolower(gsub("\\']","",Wiki$Genre))
+head(Wiki)
+```
+```{r}
+NYT$year <- paste("Times Bestseller in",as.factor(format(NYT$published_date, "%Y")))
+head(NYT)
+```
+
+```{r}
+Fiction <- c("combined-print-and-e-book-fiction","hardcover-fiction",
+             "trade-fiction-paperback")
+Non_Fiction <- c("combined-print-and-e-book-nonfiction","hardcover-nonfiction",
+                 "paperback-nonfiction")
+Advice <- c("advice-how-to-and-miscellaneous")   
+Young_adult <- c("young-adult-hardcover")
+```
+
+```{r}
+genre_simplified <- function(genre) {
+  if (genre %in% Fiction){result <- "fiction"}
+  if (genre %in% Non_Fiction) {result <- "nonfiction"}
+  if (genre %in% Advice) {result <- "advice"}
+  if (genre %in% Young_adult) {result <- "youngadult"}
+  return(result)
+}
+NYT$Genre <- sapply(NYT$genre, genre_simplified)
+
+```
+```{r}
+NYT <- NYT %>% select(title,author,Genre,year) %>% filter(Genre != "youngadult") %>% distinct
+NYT
+```
+```{r}
+Books <- NYT %>% left_join(GoogleBooks_date_genre %>%
+                             select(Published_date, Categories),
+                             by = c('title'))
+Books$Categories <- gsub("\\","",Books$Categories,fixed = TRUE)
+head(Books)
+```
+```{r}
+Wiki <- Wiki %>% select(book, Genre)
+head(Wiki)
+```
+```{r}
+colnames(Wiki) <- c('title','Wiki_Category')
+head(Wiki)
+```
+```{r}
+Books <- Books %>% left_join(Wiki, by = 'title')
+head(Books)
+```
+```{r}
+Books_ARM <- Books %>% select(year,Genre,Categories,Wiki_Category) %>%
+  filter((Categories != Genre & !(is.na(Categories)))|
+           (Wiki_Category != Genre &!is.na(Wiki_Category)))
+
+Books_ARM
+```
+
+```{r}
+
+write.table(Books_ARM, file = paste(path,'/NYT_ARM.txt',sep = ''),
+            sep = ",",
+            row.names = FALSE)
+```
+
+
+```{r}
+dim(Books_ARM)
+```
+
+```{r}
+Books <- read.transactions(paste(path,'/NYT_ARM.txt',sep = ''),
+                           rm.duplicates = FALSE, 
+                           format = "basket",  ##if you use "single" also use cols=c(1,2)
+                           sep=",",  ## csv file
+                           cols=NULL) ## The dataset has no row numbers
+inspect(Books[1:10])
+```
+```{r}
+Frules = arules::apriori(Books,parameter = list(support = 0.01,confidence = 0.01))
+
+inspect(Frules)
+
+```
+
+```{r}
+plot(Frules)
+```
+```{r}
+(widget <- plot(Frules, engine = "htmlwidget"))
+saveWidget(
+  widget,
+  'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/plots/Frules.html',
+  selfcontained = TRUE,
+  libdir = NULL,
+  background = "white",
+  title = class(widget)[[1]],
+  knitrOptions = list()
+)
+```
+
+```{r}
+SortedRules <- sort(Frules, by="support", decreasing=TRUE)
+inspect(SortedRules[1:15])
+```
+
+```{r}
+SortedRules <- sort(Frules, by="confidence", decreasing=TRUE)
+inspect(SortedRules[1:15])
+```
+
+```{r}
+SortedRules <- sort(Frules, by="lift", decreasing=TRUE)
+inspect(SortedRules[1:15])
+```
+
+
+```{r}
+advice_rules <- arules::apriori(Books,parameter = list(support = 0.01,confidence = 0.01,
+                                                       minlen = 2),
+                                appearance = list(lhs = "advice",
+                                                  none = c("Times Bestseller in 2015",
+                                                           "Times Bestseller in 2016",
+                                                           "Times Bestseller in 2017",
+                                                           "Times Bestseller in 2018",
+                                                           "Times Bestseller in 2019",
+                                                           "Times Bestseller in 2020",
+                                                           "Times Bestseller in 2021",
+                                                           "Times Bestseller in 2022")))
+inspect(advice_rules)
+```
+```{r}
+plot(advice_rules, method="graph")
+
+```
+
+
+```{r}
+fiction_rules <- arules::apriori(Books,parameter = list(support = 0.01,confidence = 0.01,
+                                                       minlen = 2),
+                                appearance = list(lhs = "fiction",
+                                                  none = c("Times Bestseller in 2015",
+                                                           "Times Bestseller in 2016",
+                                                           "Times Bestseller in 2017",
+                                                           "Times Bestseller in 2018",
+                                                           "Times Bestseller in 2019",
+                                                           "Times Bestseller in 2020",
+                                                           "Times Bestseller in 2021",
+                                                           "Times Bestseller in 2022")))
+inspect(fiction_rules)
+```
+```{r}
+plot(fiction_rules, method="graph")
+
+```
+```{r}
+non_fiction_rules <- arules::apriori(Books,parameter = list(support = 0.01,
+                                                            confidence = 0.01,
+                                                       minlen = 2),
+                                appearance = list(lhs = "nonfiction",
+                                                  none = c("Times Bestseller in 2015",
+                                                           "Times Bestseller in 2016",
+                                                           "Times Bestseller in 2017",
+                                                           "Times Bestseller in 2018",
+                                                           "Times Bestseller in 2019",
+                                                           "Times Bestseller in 2020",
+                                                           "Times Bestseller in 2021",
+                                                           "Times Bestseller in 2022",
+                                                           "Times Bestseller in 2023")))
+inspect(non_fiction_rules)
+```
+```{r}
+plot(non_fiction_rules, method="graph")
+
+```
+```{r}
+rules <- arules::apriori(Books,parameter = list(support = 0.005,
+                                                            confidence = 0.01,
+                                                       minlen = 3))
+
+#inspect(non_fiction_rules)
+
+non_fiction_year_rules <- subset(rules, subset = lhs %in% "nonfiction" & lhs %in% 
+                  c("Times Bestseller in 2015",
+                                                           "Times Bestseller in 2016",
+                                                           "Times Bestseller in 2017",
+                                                           "Times Bestseller in 2018",
+                                                           "Times Bestseller in 2019",
+                                                           "Times Bestseller in 2020",
+                                                           "Times Bestseller in 2021",
+                                                           "Times Bestseller in 2022",
+                                                           "Times Bestseller in 2023"))
+
+fiction_year_rules <- subset(rules, subset = lhs %in% "fiction" & lhs %in% 
+                  c("Times Bestseller in 2015",
+                                                           "Times Bestseller in 2016",
+                                                           "Times Bestseller in 2017",
+                                                           "Times Bestseller in 2018",
+                                                           "Times Bestseller in 2019",
+                                                           "Times Bestseller in 2020",
+                                                           "Times Bestseller in 2021",
+                                                           "Times Bestseller in 2022",
+                                                           "Times Bestseller in 2023"))
+advice_year_rules <- subset(rules, subset = lhs %in% "advice" & lhs %in% 
+                  c("Times Bestseller in 2015",
+                                                           "Times Bestseller in 2016",
+                                                           "Times Bestseller in 2017",
+                                                           "Times Bestseller in 2018",
+                                                           "Times Bestseller in 2019",
+                                                           "Times Bestseller in 2020",
+                                                           "Times Bestseller in 2021",
+                                                           "Times Bestseller in 2022",
+                                                           "Times Bestseller in 2023"))
+
+```
+```{r}
+(widget <- plot(non_fiction_year_rules, method = 'graph', engine = 'htmlwidget'))
+
+saveWidget(
+  widget,
+  'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/plots/non_fiction.html',
+  selfcontained = TRUE,
+  libdir = NULL,
+  background = "white",
+  title = class(widget)[[1]],
+  knitrOptions = list()
+)
+```
+```{r}
+plot(fiction_year_rules, method = 'graph', engine = 'htmlwidget')
+```
+```{r}
+(widget <- plot(advice_year_rules, method = 'graph', engine = 'htmlwidget'))
+
+saveWidget(
+  widget,
+  'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/plots/Advice.html',
+  selfcontained = TRUE,
+  libdir = NULL,
+  background = "white",
+  title = class(widget)[[1]],
+  knitrOptions = list()
+)
+```

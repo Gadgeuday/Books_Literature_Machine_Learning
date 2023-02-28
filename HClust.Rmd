@@ -1,0 +1,126 @@
+---
+title: "Hierarchical_clustering"
+author: "Uday Gadge"
+date: "2023-02-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tm)
+library(stringr)
+library(wordcloud)
+library(philentropy)
+library(SnowballC)
+library(caTools)
+library(dplyr)
+library(textstem) 
+library(spider)
+library(networkD3)
+```
+```{r}
+path <- "C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/Data/CleanBooks_v1"
+books_corpus <- Corpus(DirSource(path))
+```
+
+```{r}
+Count_vectors <- DocumentTermMatrix(books_corpus,
+                                 control = list(
+                                   stopwords = TRUE, 
+                                   wordLengths=c(4, Inf),
+                                   removePunctuation = TRUE,
+                                   removeNumbers = TRUE,
+                                   tolower=TRUE
+                                 ))
+```
+
+
+```{r}
+inspect(Count_vectors)
+```
+```{r}
+Count_vectors_df <- as.data.frame(as.matrix(Count_vectors))
+```
+
+```{r}
+initial_rownames <- rownames(Count_vectors_df)
+final_row_names <- c()
+for (row in initial_rownames){
+  row_val <- gsub(".txt","",(strsplit(row,"_")[[1]][2]))
+  final_row_names <- c(final_row_names,c(row_val))
+}
+final_row_names
+rownames(Count_vectors_df) <- final_row_names
+```
+
+
+```{r}
+
+dist_Count_vectors <- distance(as.matrix(scale(Count_vectors_df)),
+                              method="cosine",use.row.names = TRUE)
+dist_Count_vectors<- as.dist(dist_Count_vectors)
+HClust <- hclust(dist_Count_vectors, method="ward.D2")
+plot(HClust, cex=.7, hang=-1,main = "Cosine Sim")
+```
+```{r}
+heatmap(as.matrix(dist_Count_vectors))
+```
+```{r}
+radialNetwork(as.radialNetwork(HClust))
+```
+
+
+### Jane Austen and Charles Dickens
+```{r}
+path <- "C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/Data/CleanBooks_v2"
+books_corpus <- Corpus(DirSource(path))
+```
+
+```{r}
+Count_vectors <- DocumentTermMatrix(books_corpus,
+                                 control = list(
+                                   stopwords = TRUE, 
+                                   wordLengths=c(4, Inf),
+                                   removePunctuation = TRUE,
+                                   removeNumbers = TRUE,
+                                   tolower=TRUE
+                                 ))
+```
+
+
+```{r}
+inspect(Count_vectors)
+```
+```{r}
+Count_vectors_df <- as.data.frame(as.matrix(Count_vectors))
+```
+
+```{r}
+initial_rownames <- rownames(Count_vectors_df)
+final_row_names <- c()
+for (row in initial_rownames){
+  row_val <- gsub(".txt","",(strsplit(row,"_")[[1]][2]))
+  final_row_names <- c(final_row_names,c(row_val))
+}
+final_row_names
+rownames(Count_vectors_df) <- final_row_names
+```
+
+
+```{r}
+
+dist_Count_vectors <- distance(as.matrix(scale(Count_vectors_df)),
+                              method="cosine",use.row.names = TRUE)
+dist_Count_vectors<- as.dist(dist_Count_vectors)
+HClust <- hclust(dist_Count_vectors, method="ward.D2")
+plot(HClust, cex=.7, hang=-1,main = "Cosine Sim")
+```
+```{r}
+heatmap(as.matrix(dist_Count_vectors))
+```
+```{r}
+radialNetwork(as.radialNetwork(HClust))
+```
