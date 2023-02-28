@@ -69,9 +69,34 @@ plot(HClust, cex=.7, hang=-1,main = "Cosine Sim")
 heatmap(as.matrix(dist_Count_vectors))
 ```
 ```{r}
-radialNetwork(as.radialNetwork(HClust))
+(widget <- radialNetwork(as.radialNetwork(HClust)))
+saveWidget(
+  widget,
+  'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/plots/three_authors.html',
+  selfcontained = TRUE,
+  libdir = NULL,
+  background = "white",
+  title = class(widget)[[1]],
+  knitrOptions = list()
+)
 ```
 
+```{r}
+distance_df <- as.data.frame(distance(as.matrix(scale(Count_vectors_df)),
+                              method="cosine",use.row.names = TRUE))
+distance_df$source <- rownames(distance_df)
+distance_df <- gather(distance_df,"Target","Similarity",-source)
+```
+
+```{r}
+library(ggplot2)
+distance_df %>% ggplot(aes(x = source, y = Target, fill = Similarity)) +
+  geom_tile()+
+  geom_text(aes(label = round(Similarity, 3)),color = 'white',size = 2)+
+  scale_fill_gradient(low = '#0E1A40', high = '#946B2D')+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
 
 ### Jane Austen and Charles Dickens
 ```{r}
@@ -122,5 +147,28 @@ plot(HClust, cex=.7, hang=-1,main = "Cosine Sim")
 heatmap(as.matrix(dist_Count_vectors))
 ```
 ```{r}
-radialNetwork(as.radialNetwork(HClust))
+(widget <- radialNetwork(as.radialNetwork(HClust)))
+
+saveWidget(
+  widget,
+  'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/plots/two_authors.html',
+  selfcontained = TRUE,
+  libdir = NULL,
+  background = "white",
+  title = class(widget)[[1]],
+  knitrOptions = list()
+)
+```
+```{r}
+distance_df <- as.data.frame(distance(as.matrix(scale(Count_vectors_df)),
+                              method="cosine",use.row.names = TRUE))
+distance_df$source <- rownames(distance_df)
+distance_df <- gather(distance_df,"Target","Similarity",-source)
+```
+```{r}
+distance_df %>% ggplot(aes(x = source, y = Target, fill = Similarity)) +
+  geom_tile()+
+  geom_text(aes(label = round(Similarity, 3)),color = 'white',size = 2)+
+  scale_fill_gradient(low = '#840904', high = '#D3A625')+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
