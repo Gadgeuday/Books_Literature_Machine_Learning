@@ -22,7 +22,7 @@ library(spider)
 library(networkD3)
 ```
 ```{r}
-path <- "C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/Data/CleanBooks_v1"
+path <- "C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/Data/CleanBooks"
 books_corpus <- Corpus(DirSource(path))
 ```
 
@@ -48,12 +48,20 @@ Count_vectors_df <- as.data.frame(as.matrix(Count_vectors))
 ```{r}
 initial_rownames <- rownames(Count_vectors_df)
 final_row_names <- c()
+authors <- c()
 for (row in initial_rownames){
   row_val <- gsub(".txt","",(strsplit(row,"_")[[1]][2]))
+  author <- strsplit(row,"_")[[1]][1]
   final_row_names <- c(final_row_names,c(row_val))
+  authors <- c(authors,c(author))
 }
 final_row_names
+author_book <- data.frame(authors,final_row_names)
+authors_df <- data.frame(authors) %>% unique()
+authors_df$order <- c(1:5)
+author_book <- left_join(author_book,authors_df,by = 'authors')
 rownames(Count_vectors_df) <- final_row_names
+author_book
 ```
 
 
@@ -61,18 +69,26 @@ rownames(Count_vectors_df) <- final_row_names
 
 dist_Count_vectors <- distance(as.matrix(scale(Count_vectors_df)),
                               method="cosine",use.row.names = TRUE)
-dist_Count_vectors<- as.dist(dist_Count_vectors)
+dist_Count_vectors<- 1 - as.dist(dist_Count_vectors)
 HClust <- hclust(dist_Count_vectors, method="ward.D2")
-plot(HClust, cex=.7, hang=-1,main = "Cosine Sim")
+plot(HClust, cex=.7, hang=-1,main = "Cosine Distance")
+rect.hclust(HClust, k = 5, border = c('#0E1A40','#946B2D','#840904','#D3A625'))
+```
+
+
+```{r}
+dist_matrix <- as.matrix(dist_Count_vectors)
+
+dist_matrix
+heatmap(dist_matrix)
 ```
 ```{r}
-heatmap(as.matrix(dist_Count_vectors))
-```
-```{r}
+library(htmlwidgets)
+
 (widget <- radialNetwork(as.radialNetwork(HClust)))
 saveWidget(
   widget,
-  'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/plots/three_authors.html',
+  'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/plots/Authors.html',
   selfcontained = TRUE,
   libdir = NULL,
   background = "white",
@@ -82,17 +98,19 @@ saveWidget(
 ```
 
 ```{r}
+colnames(author_book) <- c("Author","Target","Order")
 distance_df <- as.data.frame(distance(as.matrix(scale(Count_vectors_df)),
                               method="cosine",use.row.names = TRUE))
 distance_df$source <- rownames(distance_df)
 distance_df <- gather(distance_df,"Target","Similarity",-source)
+distance_df <- left_join(distance_df,author_book,by = 'Target')
+distance_df
 ```
 
 ```{r}
 library(ggplot2)
-distance_df %>% ggplot(aes(x = source, y = Target, fill = Similarity)) +
+distance_df %>% ggplot(aes(x = Target, y = source, fill = Similarity)) +
   geom_tile()+
-  geom_text(aes(label = round(Similarity, 3)),color = 'white',size = 2)+
   scale_fill_gradient(low = '#0E1A40', high = '#946B2D')+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
@@ -139,12 +157,13 @@ rownames(Count_vectors_df) <- final_row_names
 
 dist_Count_vectors <- distance(as.matrix(scale(Count_vectors_df)),
                               method="cosine",use.row.names = TRUE)
-dist_Count_vectors<- as.dist(dist_Count_vectors)
+dist_Count_vectors<- 1 - as.dist(dist_Count_vectors)
 HClust <- hclust(dist_Count_vectors, method="ward.D2")
 plot(HClust, cex=.7, hang=-1,main = "Cosine Sim")
+rect.hclust(HClust, k = 2, border = c('lightblue','lightgreen'))
 ```
 ```{r}
-heatmap(as.matrix(dist_Count_vectors))
+heatmap(1 - as.matrix(dist_Count_vectors))
 ```
 ```{r}
 (widget <- radialNetwork(as.radialNetwork(HClust)))
