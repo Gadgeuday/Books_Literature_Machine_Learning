@@ -1,0 +1,222 @@
+---
+title: "LinearRegression"
+author: "Uday Gadge"
+date: "2023-04-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(Matrix)
+library(purrr)
+library(arules)
+library(arulesViz)
+library(readxl)
+```
+
+Collecting the data
+
+```{r}
+path <- 'C:/Users/gadge/OneDrive/Desktop/MachineLearning/Project/Data'
+NYT <- read_csv(paste(path,'/NewYorkTimesBestsellersLists.csv',sep = ''))
+head(NYT)
+```
+```{r}
+Wiki <- read_excel(paste(path,'/Wikipedia_information.xlsx',sep = ''))
+head(Wiki)
+```
+```{r}
+GoogleBooks <- read_csv(paste(path,'/isbn_data.csv',sep = ''))
+head(GoogleBooks)
+```
+```{r}
+NYT_books_isbn <- read_csv(paste(path,'/Book_ISBN.csv',sep = ''))
+head(NYT_books_isbn)
+```
+```{r}
+GoogleBooks <- NYT_books_isbn %>% left_join(GoogleBooks, by = c('isbn13'))
+head(GoogleBooks)
+```
+```{r}
+GoogleBooks$Book_Published_date <- as.Date(GoogleBooks$Book_Published_date)
+head(GoogleBooks)
+```
+
+```{r}
+Googlebooks_date <- GoogleBooks %>% group_by(title, author) %>% 
+  summarise(Published_date = min(Book_Published_date, na.rm = TRUE))
+head(Googlebooks_date)
+```
+```{r}
+p <- function(v) {
+  Reduce(f=paste0, x = v)
+}
+
+GoogleBooks_Genre <- GoogleBooks %>% select(title,author,Categories) %>%
+   filter(!is.na(Categories)) %>%
+   distinct() %>%
+   group_by(title,author) %>%
+   summarize(Categories = p(as.character(Categories))) 
+   
+GoogleBooks_Genre$Categories <- str_sub(tolower(GoogleBooks_Genre$Categories),3,-3)
+
+GoogleBooks_Genre$Categories <- gsub("\\]\\[",'","',
+                                          GoogleBooks_Genre$Categories)
+
+head(GoogleBooks_Genre)
+```
+```{r}
+GoogleBooks_date_genre <- Googlebooks_date %>% left_join(GoogleBooks_Genre,
+                                                         by = c('title','author'))
+head(GoogleBooks_date_genre)
+```
+
+
+```{r}
+head(Wiki)
+```
+
+```{r}
+Wiki <- Wiki %>% filter(Genre != 'N/A') %>%
+  mutate(Genre = gsub("', '",'","',Genre)) 
+head(Wiki)
+```
+```{r}
+Wiki$Genre <- gsub("\\['","",Wiki$Genre)
+Wiki$Genre <- tolower(gsub("\\']","",Wiki$Genre))
+head(Wiki)
+```
+```{r}
+NYT$year <- paste("Times Bestseller in",as.factor(format(NYT$published_date, "%Y")))
+head(NYT)
+```
+
+```{r}
+Fiction <- c("combined-print-and-e-book-fiction","hardcover-fiction",
+             "trade-fiction-paperback")
+Non_Fiction <- c("combined-print-and-e-book-nonfiction","hardcover-nonfiction",
+                 "paperback-nonfiction")
+Advice <- c("advice-how-to-and-miscellaneous")   
+Young_adult <- c("young-adult-hardcover")
+```
+
+```{r}
+genre_simplified <- function(genre) {
+  if (genre %in% Fiction){result <- "fiction"}
+  if (genre %in% Non_Fiction) {result <- "nonfiction"}
+  if (genre %in% Advice) {result <- "advice"}
+  if (genre %in% Young_adult) {result <- "youngadult"}
+  return(result)
+}
+NYT$Genre <- sapply(NYT$genre, genre_simplified)
+
+```
+```{r}
+NYT_comp <- NYT %>% group_by(title,author,Genre) %>% summarize(weeks_on_list = max(weeks_on_list, na.rm = TRUE),
+                                                                    highest_rank = min(rank, na.rm = TRUE))
+NYT <- NYT %>% select(title,author,Genre) %>% filter(Genre != "youngadult") %>% distinct
+NYT <- NYT %>% left_join(NYT_comp,by = c('title','author','Genre'))
+NYT
+```
+
+```{r}
+GoogleBooks_comp <- GoogleBooks %>% select(c("title","author","PageCount","list_price","Ebook_available",
+           "list_price_currency","Epub_available")) %>% left_join(GoogleBooks_date_genre,
+                                                         by = c('title','author')) %>% distinct %>%
+  filter(!is.na(list_price)) %>% filter(list_price != 'Not For Sale')
+GoogleBooks_comp
+```
+
+```{r}
+Books <- GoogleBooks_comp %>% select(-c(author,list_price_currency)) %>% left_join(NYT_comp ,
+                             by = c('title'))
+Books$Categories <- gsub("\\","",Books$Categories,fixed = TRUE)
+Books
+```
+```{r}
+sapply(Books, function(x) sum(is.na(x)))
+```
+```{r}
+Books$list_price <- as.numeric(Books$list_price)
+Books$PageCount <- as.numeric(Books$PageCount)
+Books$year <- as.numeric(format(Books$Published_date, "%Y"))
+Books$Genre <- as.factor(Books$Genre)
+Books
+```
+
+```{r}
+pairs(Books %>% select(c("list_price",'PageCount','year','weeks_on_list','highest_rank','Genre')))
+```
+```{r}
+col4 = colorRampPalette(c('#740001', '#0E1A40','#FFD800','#1A472A'))
+library(corrplot)
+corrplot(cor(Books %>% select(c("list_price",'PageCount','year','weeks_on_list','highest_rank'))), 
+         method = "ellipse",col = col4(100),  addCoef.col = "black", tl.col = "black")
+```
+
+```{r}
+lmod <- lm(list_price ~ PageCount + year + Genre + weeks_on_list + highest_rank, data = Books)
+summary(lmod)
+```
+```{r}
+options(repr.plot.width = 9, repr.plot.height = 9)
+par(mfrow = c(2,2))
+plot(lmod)
+```
+
+```{r}
+Books[346,]
+
+```
+```{r}
+boxplot(Books$list_price, col = '#D3A625')
+
+```
+
+```{r}
+Books <- Books[-346,]
+```
+```{r}
+lmod1 <- lm(list_price ~ PageCount + year + Genre + weeks_on_list + highest_rank, data = Books)
+summary(lmod1)
+```
+```{r}
+options(repr.plot.width = 9, repr.plot.height = 9)
+par(mfrow = c(2,2))
+plot(lmod1)
+```
+```{r}
+lmod2 <- lm(list_price ~ PageCount + year + Genre + weeks_on_list, data = Books)
+summary(lmod2)
+```
+```{r}
+options(repr.plot.width = 9, repr.plot.height = 9)
+par(mfrow = c(2,2))
+plot(lmod2)
+```
+```{r}
+ggplot(mapping = aes(x = Books$list_price,y = fitted(lmod2))) + geom_point() + geom_smooth(se = FALSE)+
+  xlab('Actual')+ylab('Predicted')
+```
+
+```{r}
+indices <- sample(1:dim(Books)[1],floor(0.8*dim(Books)[1]))
+train <- Books[indices,]
+test <- Books[-indices,]
+head(train)
+```
+```{r}
+lmod_train <- lm(list_price ~ PageCount + year + Genre + weeks_on_list, data = train)
+```
+```{r}
+y_pred <- predict(lmod_train,newdata = test %>% select(-c(list_price)))
+(MSPE <- sum((test$list_price - y_pred)^2)/(length(y_pred)))
+```
